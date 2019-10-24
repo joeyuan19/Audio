@@ -63,10 +63,8 @@ def run_visuals(stream):
         
         t += 1
         pix = tuple(255*(1+np.sin(f*t))//2 for f in (fr,fg,fb))
-        for w in range(width):
-            h = int(height*(1 + data_w[w])/2)
-            pixels[w,h-5:h+5,:] = pix
-        
+        xy = [(w,int(height*(1 + data_w[w])/2)) for w in range(width)]
+        pygame.draw.lines(screen,pix,xy) 
         surfarray.blit_array(screen, pixels)
         pygame.display.flip()
 
