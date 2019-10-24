@@ -7,14 +7,16 @@ import pyaudio
 import wave
 import time
 
+size = width, height = 1024, 500
+
 FORMAT   = pyaudio.paInt16
 CHANNELS = 1
 RATE     = 44100
-CHUNK    = 1024
+CHUNK    = width
 window   = np.blackman(CHUNK)
 
 def to_rgb(xyz):
-    return (256*(xyz+1)/2)//1
+    return (400*(xyz+1)/2)//1
 
 def to_xyz(rgb):
     return 1000*(rgb/256) - 1
@@ -22,38 +24,48 @@ def to_xyz(rgb):
 def process_stream_data(data):
     waveData = wave.struct.unpack("%dh"%(CHUNK),data)
     waveData = np.array(waveData)
-    indata   = waveData*window
-    return np.average(indata)
+    indata   = waveData
+    norm     = np.max(np.abs(indata))
+    return indata/norm
 
 pygame.init()
 
-size = width, height = 500, 500
 
-pixels = np.zeros((height,width,3))
-screen = pygame.display.set_mode(size)
+pixels = np.ones((width,height,3))
+screen = pygame.display.set_mode(size)#,flags=pygame.OPENGL)
 
-def FIFO(li,item,L=50):
-    if len(li) == 50:
+def FIFO(li,item,L=200):
+    if len(li) == L:
         li.pop(0)
     li.append(item)
     return li
 
+R = np.sqrt(width**2 + height**2)
+
+idx_map = np.array([[int(CHUNK*np.sqrt((y - width//2)**2 + (x - height//2)**2)/R) for x in range(height)] for y in range(width)]) 
+
 
 def run_visuals(stream):
-    recent_values = []
+    t = 0
+    fr,fg,fb = 1113,2017,5012
+    t_b = time.time()
     while 1:
         for event in pygame.event.get():
             if event.type == pygame.QUIT: sys.exit()
-        
         data = stream.read(CHUNK,exception_on_overflow=False)
-        a = process_stream_data(data)
-        recent_values = FIFO(recent_values,a)
-        low   = min(recent_values)
-        high  = max(recent_values)
+        data = process_stream_data(data)
         
-        p = (a-low)/(high-low)
-
-        pixels[:,:,0] = (256*p)//1
+        data_w = data*window
+        data_b = data[idx_map].reshape(idx_map.shape)
+        
+        pixels[:,:,:2] = 0
+        pixels[:,:,2] = data_b 
+        
+        t += 1
+        pix = tuple(255*(1+np.sin(f*t))//2 for f in (fr,fg,fb))
+        for w in range(width):
+            h = int(height*(1 + data_w[w])/2)
+            pixels[w,h-5:h+5,:] = pix
         
         surfarray.blit_array(screen, pixels)
         pygame.display.flip()
@@ -67,6 +79,6 @@ except KeyboardInterrupt:
     print('User interruption, shutting down stream...')
     pass
 
-stream.stop_stream()
-stream.close()
+s.stop_stream()
+s.close()
 p.terminate()
