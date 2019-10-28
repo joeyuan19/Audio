@@ -24,7 +24,6 @@ def to_rgb(xyz):
 def to_xyz(rgb):
     return 1000*(rgb/256) - 1
 
-
 def radius(x,y):
     return np.sqrt(x**2 + y**2)
 
