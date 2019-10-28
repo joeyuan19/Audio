@@ -368,7 +368,6 @@ def run_visuals(stream_manager):
                     t = 0
                     transition = 0
                     pixels = np.ones((width,height,3))
-        pygame.display.flip()
 
 size = width, height = 1024, 500
 
