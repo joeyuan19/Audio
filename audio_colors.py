@@ -345,9 +345,13 @@ def reset_visuals(screen,stream,visuals):
 def run_visuals(stream_manager,size):
     t = 0
     pygame.init()
+    print('Creating Screen...',end='')
     screen = pygame.display.set_mode((0,0),pygame.FULLSCREEN)
+    print('done.')
+    print('Initializing Visuals...',end='')
     visuals = [cls(screen,stream_manager) for cls in
                (BasicVisual,JoyDivisionVisual,BlurVisual,GravityVisual)]
+    print('done.')
     
     transition = 0
     visual = 0
@@ -405,8 +409,10 @@ CHANNELS = 1
 RATE     = 44100
 CHUNK    = 512
 
+print('Opening Audio Stream...',end='')
 sm = StreamManager(FORMAT,CHANNELS,RATE,CHUNK)
 sm.start()
+print('done.')
 
 try:
     run_visuals(sm,size)
