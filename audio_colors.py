@@ -6,6 +6,7 @@ import pygame.gfxdraw
 import numpy as np
 
 import pyaudio
+import audioop
 import wave
 import time
 import pickle
@@ -197,16 +198,20 @@ class StreamManager(object):
         df = np.fft.fft(data)
         return np.fft.ifft(df)
     
+    def _read(self):
+        return self.stream.read(self.chunk,exception_on_overflow=False)
+        
     def read(self):
-        data = self.stream.read(self.chunk,exception_on_overflow=False)
-        data = self.process_stream_data(data)
+        data = self.process_stream_data(self._read())
         return data
     
     def stop(self):
         self.stream.stop_stream()
         self.stream.close()
         self.p.terminate()
-        
+    
+    def volume(self):
+        return audioop.rms(self._read(),2)
 
 class Visual(object):
     def __init__(self,screen,stream):
@@ -226,6 +231,7 @@ class BasicVisual(Visual):
         self.pixels    = np.ones((width,height,3))
         self.width_pts = list(range(width))
         self.color_f   = .01,.05,.5
+        self.chan_f    = np.array((1/10,1/20,1/50))
         
     def iterate(self,t):
         data = self.stream.read()
@@ -238,9 +244,10 @@ class BasicVisual(Visual):
         data_f = np.roll(data,len(data)//2)
         data_g = data_f[self.idx_map].reshape(self.idx_map.shape)
         
-        self.pixels[:,:,0] = data_r
-        self.pixels[:,:,1] = data_g
-        self.pixels[:,:,2] = data_b
+        amp = np.sin(self.chan_f*t)**2
+        self.pixels[:,:,0] = data_r*amp[0]
+        self.pixels[:,:,1] = data_g*amp[1]
+        self.pixels[:,:,2] = data_b*amp[2]
         surfarray.blit_array(self.screen, self.pixels)
         
         pix = tuple(255*(1+np.sin(f*t))//2 for f in self.color_f)
@@ -252,7 +259,7 @@ class JoyDivisionVisual(Visual):
     def __init__(self,*args,**kwargs):
         super().__init__(*args,**kwargs)
         self.lines     = []
-        self.L         = 15
+        self.L         = 12
         self.width_pts = list(range(self.width))
         self.offset    = -self.height/self.L
         self.black     = np.zeros((width,height,3))
@@ -268,7 +275,7 @@ class JoyDivisionVisual(Visual):
         xy = np.array([self.width_pts,data]).T
         xy[:,1] = np.round(.85*self.height + self.height*(1 + xy[:,1])/2/8)
         
-        pix = tuple(255*(1+np.sin(f*t))//2 for f in self.color_f)
+        pix = tuple(50 + 205*(1+np.sin(f*t))//2 for f in self.color_f)
         fifo_append(self.lines,(xy,pix),L=self.L)
         
         for i,line_info in enumerate(self.lines):
@@ -287,16 +294,19 @@ class BlurVisual(Visual):
         w,h,c = np.shape(self.images[0])
         self.surfs = [pygame.Surface((w,h)) for i in self.images]
         [surfarray.blit_array(surf,image) for surf,image in zip(self.surfs,self.images)]
+        s  = self.surfs[0]
+        self.screen.blit(s,(0,0))
         self.L = len(self.images)
-        self.black   = np.zeros((width,height,3))
-        self.maximum = 500
+        self.maximum = 0
         
     def iterate(self,t):
-        data = self.stream.read()
-        #fft  = np.fft.rfft(data)
-        idx = self.L*np.min(self.maximum,np.max(np.abs(data)))/self.maximum
-        s  = self.surfs[self.L - int(idx)]
+        vol = self.stream.volume()
+        self.maximum = max(vol,self.maximum)
+        print(self.maximum,vol)
+        idx = min(0,max(self.L,int(vol/1000)))
+        s  = self.surfs[idx]
         self.screen.blit(s,(0,0))
+        self.screen.fill((0,0,0))
 
 class GravityVisual(Visual):
     def __init__(self,*args,**kwargs):
@@ -319,7 +329,7 @@ class GravityVisual(Visual):
         self.bm.draw_all(self.screen)
         self.bm.update(t)
 
-def run_visuals(stream_manager):
+def run_visuals(stream_manager,size):
     t = 0
     pygame.init()
     screen = pygame.display.set_mode(size)
@@ -327,7 +337,7 @@ def run_visuals(stream_manager):
                (BasicVisual,JoyDivisionVisual,BlurVisual,GravityVisual)]
     
     transition = 0
-    visual = 3
+    visual = 1
     while 1:
         print(t)
         for event in pygame.event.get():
@@ -368,6 +378,7 @@ def run_visuals(stream_manager):
                     t = 0
                     transition = 0
                     pixels = np.ones((width,height,3))
+        pygame.display.flip()
 
 size = width, height = 1024, 500
 
@@ -380,7 +391,7 @@ sm = StreamManager(FORMAT,CHANNELS,RATE,CHUNK)
 sm.start()
 
 try:
-    run_visuals(sm)
+    run_visuals(sm,size)
 except KeyboardInterrupt:
     print('User interruption, shutting down stream...')
     pass
