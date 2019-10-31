@@ -344,7 +344,9 @@ def reset_visuals(screen,stream,visuals):
 
 def run_visuals(stream_manager,size):
     t = 0
+    print('Initializing pygame...',end='')
     pygame.init()
+    print('done.')
     print('Creating Screen...',end='')
     screen = pygame.display.set_mode((0,0),pygame.FULLSCREEN)
     print('done.')
