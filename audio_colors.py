@@ -229,7 +229,7 @@ class BasicVisual(Visual):
               for x in range(height)] 
               for y in range(width)]) 
         self.pixels    = np.ones((width,height,3))
-        self.width_pts = list(range(width))
+        self.width_pts = np.linspace(0,width,self.stream.chunk)
         self.color_f   = .01,.05,.5
         self.chan_f    = np.array((1/10,1/20,1/50))
         
@@ -248,6 +248,7 @@ class BasicVisual(Visual):
         self.pixels[:,:,0] = data_r*amp[0]
         self.pixels[:,:,1] = data_g*amp[1]
         self.pixels[:,:,2] = data_b*amp[2]
+        print(self.width,self.screen.get_width())
         surfarray.blit_array(self.screen, self.pixels)
         
         pix = tuple(255*(1+np.sin(f*t))//2 for f in self.color_f)
@@ -260,13 +261,12 @@ class JoyDivisionVisual(Visual):
         super().__init__(*args,**kwargs)
         self.lines     = []
         self.L         = 12
-        self.width_pts = list(range(self.width))
+        self.width_pts = np.linspace(0,width,self.stream.chunk)
         self.offset    = -self.height/self.L
-        self.black     = np.zeros((width,height,3))
         self.color_f   = .3,.5,.1
         
     def iterate(self,t):
-        surfarray.blit_array(self.screen, self.black)
+        self.screen.fill((0,0,0))
         
         data = self.stream.read()
         data = self.stream.normalize(data)
@@ -329,25 +329,42 @@ class GravityVisual(Visual):
         self.bm.draw_all(self.screen)
         self.bm.update(t)
 
+def enable_fullscreen():
+    pygame.display.quit()
+    pygame.display.init()
+    return pygame.display.set_mode((0,0),pygame.FULLSCREEN)
+
+def disable_fullscreen(size):
+    pygame.display.quit()
+    pygame.display.init()
+    return pygame.display.set_mode(size, pygame.RESIZABLE)
+
+def reset_visuals(screen,stream,visuals):
+    [visual.__init__(screen,stream) for visual in visuals]
+
 def run_visuals(stream_manager,size):
     t = 0
     pygame.init()
-    screen = pygame.display.set_mode(size)
+    screen = pygame.display.set_mode((0,0),pygame.FULLSCREEN)
     visuals = [cls(screen,stream_manager) for cls in
                (BasicVisual,JoyDivisionVisual,BlurVisual,GravityVisual)]
     
     transition = 0
-    visual = 1
-    while 1:
+    visual = 0
+    running = True
+    while running:
         print(t)
         for event in pygame.event.get():
-            if event.type == pygame.QUIT: sys.exit()
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type is pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    running = False
         if not transition:
             visuals[visual].iterate(t)
             
             if t > 10000:
                 #visual = np.random.randint(0,3)
-                
                 t = 0
             else:
                 t += 1
@@ -379,13 +396,14 @@ def run_visuals(stream_manager,size):
                     transition = 0
                     pixels = np.ones((width,height,3))
         pygame.display.flip()
+    print("shutting it down")
 
-size = width, height = 1024, 500
+size = width, height = 1200, 500
 
 FORMAT   = pyaudio.paInt16
 CHANNELS = 1
 RATE     = 44100
-CHUNK    = 1024
+CHUNK    = 512
 
 sm = StreamManager(FORMAT,CHANNELS,RATE,CHUNK)
 sm.start()
